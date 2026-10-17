@@ -1,0 +1,60 @@
+services:
+  minio:
+    image: scnd/minio-mirror:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio12345
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+  pg:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: lk
+      POSTGRES_PASSWORD: lk
+      POSTGRES_DB: lakekeeper
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lk"]
+      interval: 5s
+      retries: 10
+
+  lakekeeper-migrate:
+    image: quay.io/lakekeeper/catalog:latest-main
+    command: ["migrate"]
+    environment: &lk-env
+      LAKEKEEPER__PG_ENCRYPTION_KEY: "change-me-secret-key"
+      LAKEKEEPER__PG_DATABASE_URL_READ: postgresql://lk:lk@pg:5432/lakekeeper
+      LAKEKEEPER__PG_DATABASE_URL_WRITE: postgresql://lk:lk@pg:5432/lakekeeper
+    depends_on:
+      pg:
+        condition: service_healthy
+
+  lakekeeper:
+    image: quay.io/lakekeeper/catalog:latest-main
+    command: ["serve"]
+    environment: *lk-env
+    ports:
+      - "8181:8181"
+    depends_on:
+      lakekeeper-migrate:
+        condition: service_completed_successfully
+
+  trino:
+    image: trinodb/trino:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./trino/catalog:/etc/trino/catalog
+    depends_on:
+      - lakekeeper
+      - minio
+
+volumes:
+  minio-data: {}
+  pg-data: {}

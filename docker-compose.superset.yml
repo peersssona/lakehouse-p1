@@ -1,0 +1,16 @@
+services:
+  superset:
+    build:
+      context: .
+      dockerfile: Dockerfile.superset
+    ports:
+      - "8088:8088"
+    environment:
+      SUPERSET_SECRET_KEY: "change-me-long-random-string-for-superset-2026"
+    volumes:
+      - superset-home:/app/superset_home
+    depends_on:
+      - trino
+
+volumes:
+  superset-home: {}
